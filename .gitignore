@@ -1,0 +1,5 @@
+cloudflared.exe
+*.log
+tunnel_manager.py
+start_all.bat
+__pycache__/

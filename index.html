@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>English Tutor - Telegram LMS</title>
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app-container">
+        
+        <!-- HEADER -->
+        <header class="app-header">
+            <div class="brand-wrapper">
+                <div class="brand-icon">🇬🇧</div>
+                <div>
+                    <div class="brand-title">English Hub</div>
+                    <div id="header-user-status" style="font-size: 0.75rem; color: var(--text-secondary);">Дистанционное обучение</div>
+                </div>
+            </div>
+            <div class="user-badge" id="header-actions">
+                <span id="role-pill-display" class="role-pill hidden"></span>
+                <button class="btn-icon" id="btn-logout" title="Выйти / Сменить аккаунт" onclick="logout()">🚪</button>
+            </div>
+        </header>
+
+        <!-- MAIN SCREENS CONTAINER -->
+        <main id="main-content">
+
+            <!-- 1. SCREEN: AUTH / ONBOARDING -->
+            <section id="screen-auth" class="screen active">
+                <div style="text-align: center; margin: 30px 0 20px 0;">
+                    <div style="font-size: 3.5rem; margin-bottom: 10px;">🎓</div>
+                    <h2 class="section-title" style="font-size: 1.5rem;">English Learning Hub</h2>
+                    <p class="section-subtitle" style="max-width: 380px; margin: 8px auto 0 auto; line-height: 1.45;">
+                        Закрытая интерактивная платформа для уроков английского, домашних заданий и проверки ваших знаний.
+                    </p>
+                </div>
+
+                <!-- Invite Join Card (If entered via link) -->
+                <div id="invite-join-box" class="card" style="margin-top: 20px;">
+                    <h3 style="margin-bottom: 12px; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                        <span>✨</span> Вход для Ученика по офферу
+                    </h3>
+                    <div class="alert-box info" style="margin-bottom: 14px;">
+                        Вы перешли по персональной ссылке-приглашению. Пожалуйста, введите ваше имя для старта.
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Код приглашения</label>
+                        <input type="text" id="join-invite-code" class="form-input" placeholder="Код (например, WELCOME2026)" style="font-family: monospace; font-weight: 700; letter-spacing: 1px;" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ваше Имя и Фамилия</label>
+                        <input type="text" id="join-student-name" class="form-input" placeholder="Например, Анна Смирнова">
+                    </div>
+                    <button class="btn-primary" style="width: 100%;" onclick="joinByInvite()">
+                        Войти в учебный класс 🚀
+                    </button>
+                </div>
+
+                <!-- No-Invite Gate Card (Default view if no offer) -->
+                <div id="no-invite-box" class="card hidden" style="margin-top: 20px; text-align: center; padding: 24px;">
+                    <div style="font-size: 2.2rem; margin-bottom: 10px;">🔒</div>
+                    <h3 style="margin-bottom: 8px;">Доступ по приглашениям</h3>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5;">
+                        Платформа работает только для зарегистрированных учеников. Обратитесь к вашему преподавателю за персональной ссылкой-оффером.
+                    </p>
+                    <div style="display: flex; gap: 10px; flex-direction: column;">
+                        <button class="btn-primary" onclick="showInviteInputPrompt()">Ввести инвайт-код</button>
+                    </div>
+                </div>
+
+                <!-- Teacher Entry Link (Subtle) -->
+                <div id="teacher-entry-row" style="text-align: center; margin-top: 30px;">
+                    <button class="btn-secondary btn-sm" style="opacity: 0.7; font-size: 0.75rem;" onclick="openTeacherLoginModal()">
+                        🔒 Вход для преподавателя
+                    </button>
+                </div>
+            </section>
+
+            <!-- 2. SCREEN: LESSONS (УЧЕБНИК) -->
+            <section id="screen-lessons" class="screen">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">Учебные Материалы</h2>
+                        <div class="section-subtitle">Лекции, грамматика, видеоуроки и конспекты</div>
+                    </div>
+                    <button id="btn-add-lesson" class="btn-primary btn-sm hidden" onclick="openCreateLessonModal()">
+                        + Урок
+                    </button>
+                </div>
+
+                <div id="lessons-list">
+                    <!-- Lessons loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- 3. SCREEN: LESSON VIEWER (ДЕТАЛЬНЫЙ УРОК) -->
+            <section id="screen-lesson-detail" class="screen">
+                <button class="btn-secondary btn-sm" style="margin-bottom: 14px;" onclick="showLessonsScreen()">
+                    ← Назад ко всем урокам
+                </button>
+                
+                <div class="card" id="lesson-detail-container">
+                    <!-- Filled dynamically -->
+                </div>
+            </section>
+
+            <!-- 4. SCREEN: HOMEWORKS (ДОМАШНИЕ ЗАДАНИЯ) -->
+            <section id="screen-homeworks" class="screen">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">Домашние Задания</h2>
+                        <div class="section-subtitle">Тесты, переводы и практические задания</div>
+                    </div>
+                    <button id="btn-add-hw" class="btn-primary btn-sm hidden" onclick="openCreateHomeworkModal()">
+                        + Создать ДЗ
+                    </button>
+                </div>
+
+                <div id="homeworks-list">
+                    <!-- Homeworks loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- 5. SCREEN: REVIEWS (ПРОВЕРКА ДЗ - TEACHER ONLY) -->
+            <section id="screen-reviews" class="screen">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">Центр Проверки</h2>
+                        <div class="section-subtitle">Сданные работы учеников, ожидающие оценки</div>
+                    </div>
+                </div>
+
+                <div id="submissions-list">
+                    <!-- Submissions loaded dynamically -->
+                </div>
+            </section>
+
+            <!-- 6. SCREEN: STUDENTS & OFFERS (ИНВАЙТЫ - TEACHER ONLY) -->
+            <section id="screen-students" class="screen">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">Офферы & Ученики</h2>
+                        <div class="section-subtitle">Генерация ссылок-приглашений и список учеников</div>
+                    </div>
+                </div>
+
+                <!-- Invite Generator Card -->
+                <div class="card">
+                    <h3 style="font-size: 1.05rem; margin-bottom: 10px;">Создать персональную ссылку-оффер</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 14px;">
+                        Отправьте эту ссылку ученику. Он сможет зарегистрироваться и получить мгновенный доступ к вашим материалам.
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label">Имя ученика или комментарий</label>
+                        <input type="text" id="new-invite-name" class="form-input" placeholder="Например, Алексей (индивидуальные уроки)">
+                    </div>
+                    <button class="btn-primary btn-sm" onclick="generateNewInvite()">
+                        Сгенерировать ссылку 🔗
+                    </button>
+                </div>
+
+                <div class="section-header" style="margin-top: 24px;">
+                    <h3 style="font-size: 1.05rem;">Активные ссылки-приглашения</h3>
+                </div>
+                <div id="invites-list">
+                    <!-- Invites loaded dynamically -->
+                </div>
+
+                <div class="section-header" style="margin-top: 24px;">
+                    <h3 style="font-size: 1.05rem;">Зарегистрированные ученики</h3>
+                </div>
+                <div id="students-list">
+                    <!-- Students loaded dynamically -->
+                </div>
+
+                <!-- Password Change Card (Teacher Security) -->
+                <div class="card" style="margin-top: 24px; border: 1px dashed var(--border-color);">
+                    <h3 style="font-size: 1.05rem; margin-bottom: 8px;">🔒 Безопасность аккаунта</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">
+                        Смените стандартный пароль на свой персональный, чтобы никто кроме вас не имел доступа к панели преподавателя.
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label">Новый пароль</label>
+                        <input type="password" id="new-teacher-password" class="form-input" placeholder="Введите новый пароль">
+                    </div>
+                    <button class="btn-secondary btn-sm" onclick="changeTeacherPassword()">
+                        Обновить пароль 🔑
+                    </button>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- BOTTOM NAVIGATION (TABS) -->
+        <nav class="bottom-nav hidden" id="bottom-nav">
+            <button class="nav-item active" onclick="switchNavTab('lessons')">
+                <span class="nav-icon">📚</span>
+                <span>Учебник</span>
+            </button>
+            <button class="nav-item" onclick="switchNavTab('homeworks')">
+                <span class="nav-icon">✍️</span>
+                <span>Задания</span>
+            </button>
+            <button class="nav-item teacher-only hidden" onclick="switchNavTab('reviews')">
+                <span class="nav-icon">📋</span>
+                <span>Проверка</span>
+            </button>
+            <button class="nav-item teacher-only hidden" onclick="switchNavTab('students')">
+                <span class="nav-icon">🔗</span>
+                <span>Офферы</span>
+            </button>
+        </nav>
+
+        <!-- ================= MODALS ================= -->
+
+        <!-- 1. MODAL: TEACHER LOGIN -->
+        <div id="modal-teacher-login" class="modal-overlay hidden">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3 class="modal-title">👨‍🏫 Вход для Преподавателя</h3>
+                    <button class="btn-icon" onclick="closeModal('modal-teacher-login')">✕</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Логин</label>
+                    <input type="text" id="login-username" class="form-input" placeholder="Введите ваш логин" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Пароль</label>
+                    <input type="password" id="login-password" class="form-input" placeholder="Введите пароль" autocomplete="current-password">
+                </div>
+                <button class="btn-primary" style="width: 100%; margin-top: 10px;" onclick="submitTeacherLogin()">
+                    Авторизоваться
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. MODAL: CREATE LESSON WITH MEDIA BLOCKS -->
+        <div id="modal-create-lesson" class="modal-overlay hidden">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3 class="modal-title">📖 Новый Урок</h3>
+                    <button class="btn-icon" onclick="closeModal('modal-create-lesson')">✕</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Название урока</label>
+                    <input type="text" id="lesson-title-input" class="form-input" placeholder="Например, Present Simple vs Past Simple">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Уровень сложности</label>
+                    <select id="lesson-level-input" class="form-select">
+                        <option value="A1 (Beginner)">A1 (Beginner)</option>
+                        <option value="A2 (Elementary)">A2 (Elementary)</option>
+                        <option value="B1 (Intermediate)">B1 (Intermediate)</option>
+                        <option value="B2 (Upper-Intermediate)">B2 (Upper-Intermediate)</option>
+                        <option value="All Levels" selected>All Levels (Для всех уровней)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Краткое описание урока</label>
+                    <textarea id="lesson-desc-input" class="form-textarea" placeholder="О чем этот урок..."></textarea>
+                </div>
+
+                <div style="margin: 18px 0 10px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label" style="margin: 0;">Блоки контента (Текст, Медиа, Видео):</label>
+                </div>
+
+                <div id="lesson-builder-blocks">
+                    <!-- Dynamic Blocks inside lesson builder -->
+                </div>
+
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;">
+                    <button type="button" class="btn-secondary btn-sm" onclick="addLessonBlock('text')">+ Текст</button>
+                    <button type="button" class="btn-secondary btn-sm" onclick="addLessonBlock('video')">+ Видео (YouTube/mp4)</button>
+                    <button type="button" class="btn-secondary btn-sm" onclick="addLessonBlock('image')">+ Изображение</button>
+                    <button type="button" class="btn-secondary btn-sm" onclick="addLessonBlock('vocab')">+ Словарь/Правило</button>
+                </div>
+
+                <button class="btn-primary" style="width: 100%;" onclick="saveNewLesson()">
+                    Опубликовать урок 🚀
+                </button>
+            </div>
+        </div>
+
+        <!-- 3. MODAL: CREATE HOMEWORK -->
+        <div id="modal-create-hw" class="modal-overlay hidden">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3 class="modal-title">✍️ Создать Домашнее Задание</h3>
+                    <button class="btn-icon" onclick="closeModal('modal-create-hw')">✕</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Название задания</label>
+                    <input type="text" id="hw-title-input" class="form-input" placeholder="Например, Отработка Present Simple">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Привязать к уроку</label>
+                    <select id="hw-lesson-select" class="form-select">
+                        <option value="">Без привязки (Самостоятельное ДЗ)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Инструкция для ученика</label>
+                    <textarea id="hw-desc-input" class="form-textarea" placeholder="Выполните упражнения ниже..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Дедлайн (необязательно)</label>
+                    <input type="text" id="hw-deadline-input" class="form-input" placeholder="Например, До пятницы, 18:00">
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0 10px 0;">
+                    <label class="form-label" style="margin: 0; font-size: 0.95rem; font-weight: 700;">Вопросы и упражнения:</label>
+                    <button type="button" class="btn-secondary btn-sm" onclick="toggleBulkImportPanel()" style="color: var(--primary); font-weight: 700; border-color: var(--primary); background: var(--primary-light);">
+                        ⚡ Вставить текст целиком
+                    </button>
+                </div>
+
+                <!-- Блок быстрой вставки упражнений (Bulk Import) -->
+                <div id="bulk-import-panel" class="card hidden" style="background: var(--bg-input); border: 2px dashed var(--primary); margin-bottom: 16px; padding: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-weight: 700; font-size: 0.9rem; color: var(--primary);">⚡ Быстрый импорт из Gemini / учебника</span>
+                        <button type="button" class="btn-icon btn-sm" onclick="toggleBulkImportPanel()">✕</button>
+                    </div>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.4;">
+                        Вставьте сюда список упражнений. Пропуски могут быть в виде <code>___</code>, <code>...</code> или правильного ответа в скобках <code>[am]</code>, либо со стрелочкой <code>-></code>. Каждая строка станет интерактивным заданием!
+                    </p>
+                    <textarea id="bulk-import-text" class="form-textarea" style="min-height: 130px; font-family: monospace; font-size: 0.88rem;" placeholder="1. I ___ fine.&#10;2. He ___ busy.&#10;3. They ___ at home.&#10;4. She is happy. -> [She's happy.]"></textarea>
+                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                        <button type="button" class="btn-primary btn-sm" style="flex: 1;" onclick="applyBulkImport()">
+                            🚀 Распознать и вставить все пункты
+                        </button>
+                        <button type="button" class="btn-secondary btn-sm" onclick="insertBulkExample()">
+                            Пример
+                        </button>
+                    </div>
+                </div>
+
+                <div id="hw-questions-builder">
+                    <!-- Dynamic Questions -->
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+                    <button type="button" class="btn-secondary btn-sm" onclick="addHwQuestionField('gap_fill')">
+                        + Пропуск (I ___ fine)
+                    </button>
+                    <button type="button" class="btn-secondary btn-sm" onclick="addHwQuestionField('choice')">
+                        + Тест с выбором
+                    </button>
+                    <button type="button" class="btn-secondary btn-sm" onclick="addHwQuestionField('text')">
+                        + Развернутый ответ
+                    </button>
+                </div>
+
+                <button class="btn-primary" style="width: 100%;" onclick="saveNewHomework()">
+                    Сохранить и выдать ДЗ ✍️
+                </button>
+            </div>
+        </div>
+
+        <!-- 4. MODAL: STUDENT SOLVE HOMEWORK -->
+        <div id="modal-solve-hw" class="modal-overlay hidden">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="solve-hw-title">Выполнение ДЗ</h3>
+                    <button class="btn-icon" onclick="closeModal('modal-solve-hw')">✕</button>
+                </div>
+                <p id="solve-hw-desc" style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 16px;"></p>
+                
+                <div id="solve-questions-container">
+                    <!-- Dynamic question solve cards -->
+                </div>
+
+                <button id="btn-submit-answers" class="btn-primary" style="width: 100%; margin-top: 10px;" onclick="submitHomeworkAnswers()">
+                    Отправить работу на проверку 📤
+                </button>
+            </div>
+        </div>
+
+        <!-- 5. MODAL: TEACHER REVIEW SUBMISSION -->
+        <div id="modal-review-sub" class="modal-overlay hidden">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="review-sub-title">Проверка работы</h3>
+                    <button class="btn-icon" onclick="closeModal('modal-review-sub')">✕</button>
+                </div>
+                <div id="review-sub-info" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 14px;"></div>
+                
+                <div id="review-answers-container">
+                    <!-- Question + Student Answer view -->
+                </div>
+
+                <div class="card" style="margin-top: 16px; background: var(--bg-input);">
+                    <div class="form-group">
+                        <label class="form-label">Оценка / Балл (например, 5/5 или 95/100 или Отлично)</label>
+                        <input type="text" id="review-score-input" class="form-input" placeholder="5/5">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Комментарий и разбор ошибок преподавателем</label>
+                        <textarea id="review-feedback-input" class="form-textarea" placeholder="Отличная работа! Обрати внимание на глагол..."></textarea>
+                    </div>
+                    <button class="btn-primary" style="width: 100%;" onclick="submitReviewGrade()">
+                        Сохранить оценку и отправить ученику ✅
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Application Engine -->
+    <script src="app.js"></script>
+</body>
+</html>
