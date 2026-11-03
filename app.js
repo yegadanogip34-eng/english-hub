@@ -357,15 +357,67 @@ async function openLessonDetail(lessonId) {
             }
         });
 
-        // Homework link button if attached
-        let hwButtonHtml = '';
-        if (lesson.homework) {
-            hwButtonHtml = `
-                <div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid var(--border-color);">
-                    <div style="font-size: 0.9rem; font-weight: 700; margin-bottom: 8px;">✍️ Практическое задание к этому уроку:</div>
-                    <button class="btn-primary" style="width: 100%;" onclick="openSolveHomeworkModal(${lesson.homework.id})">
-                        Перейти к выполнению ДЗ →
-                    </button>
+        // Render all homeworks attached to this lesson
+        let hwSectionHtml = '';
+        const hwList = (lesson.homeworks && lesson.homeworks.length > 0) 
+            ? lesson.homeworks 
+            : (lesson.homework ? [lesson.homework] : []);
+        
+        let hwItemsHtml = '';
+        hwList.forEach((hw, idx) => {
+            const partBadge = `<span class="badge" style="background: var(--primary-light); color: var(--primary); font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 6px;">Часть ${idx + 1}</span>`;
+            const qCount = hw.questions ? hw.questions.length : 0;
+            let statusText = '';
+            let btnActionText = 'Перейти к выполнению ДЗ →';
+
+            if (currentUser && currentUser.role === 'student') {
+                if (hw.my_submission) {
+                    if (hw.my_submission.status === 'reviewed') {
+                        statusText = `<span class="status-badge reviewed">Оценка: ${hw.my_submission.score || '5'}</span>`;
+                        btnActionText = 'Смотреть оценку и разбор →';
+                    } else {
+                        statusText = '<span class="status-badge submitted">На проверке</span>';
+                        btnActionText = 'Просмотреть ответы →';
+                    }
+                } else {
+                    statusText = '<span class="status-badge new">Не сдано</span>';
+                }
+            }
+
+            hwItemsHtml += `
+                <div class="card" style="margin-top: 10px; background: var(--bg-primary); border: 1px solid var(--border-color); padding: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        ${partBadge}
+                        ${statusText}
+                    </div>
+                    <div style="font-weight: 700; font-size: 1rem; margin-bottom: 4px;">${escapeHtml(hw.title)}</div>
+                    <div style="font-size: 0.84rem; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
+                        ${hw.description ? escapeHtml(hw.description) : `Упражнений: ${qCount}`}
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-primary btn-sm" style="flex: 1;" onclick="openSolveHomeworkModal(${hw.id})">
+                            ${btnActionText}
+                        </button>
+                        ${currentUser && currentUser.role === 'teacher' ? `
+                            <button type="button" class="btn-icon btn-sm btn-danger" title="Удалить это ДЗ" onclick="event.stopPropagation(); deleteHomework(${hw.id}, ${lesson.id})">🗑️</button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        });
+
+        if (hwList.length > 0 || (currentUser && currentUser.role === 'teacher')) {
+            hwSectionHtml = `
+                <div style="margin-top: 30px; padding-top: 18px; border-top: 2px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div style="font-size: 1.05rem; font-weight: 800;">✍️ Практические задания (${hwList.length})</div>
+                        ${currentUser && currentUser.role === 'teacher' ? `
+                            <button type="button" class="btn-secondary btn-sm" onclick="openCreateHomeworkModal(${lesson.id})" style="font-size: 0.8rem; font-weight: 600;">
+                                + Добавить часть ДЗ
+                            </button>
+                        ` : ''}
+                    </div>
+                    ${hwItemsHtml ? hwItemsHtml : '<div style="font-size: 0.85rem; color: var(--text-muted); padding: 10px 0;">К этому уроку еще не прикреплены задания. Нажмите «+ Добавить часть ДЗ», чтобы создать.</div>'}
                 </div>
             `;
         }
@@ -377,7 +429,7 @@ async function openLessonDetail(lessonId) {
             </div>
             <h2 style="font-size: 1.35rem; font-weight: 800; margin-bottom: 14px; line-height: 1.35;">${lesson.title}</h2>
             <div class="lesson-body">${blocksHtml}</div>
-            ${hwButtonHtml}
+            ${hwSectionHtml}
         `;
 
         showScreen('screen-lesson-detail');
@@ -895,7 +947,7 @@ async function submitHomeworkAnswers() {
     }
 }
 
-function deleteHomework(hwId) {
+function deleteHomework(hwId, refreshLessonId = null) {
     showConfirmDialog(
         "Удалить задание?",
         "Вы уверены, что хотите удалить это домашнее задание?",
@@ -904,6 +956,11 @@ function deleteHomework(hwId) {
             try {
                 await apiRequest(`/api/homeworks/${hwId}`, 'DELETE');
                 loadHomeworks();
+                if (refreshLessonId) {
+                    openLessonDetail(refreshLessonId);
+                } else if (currentActiveLesson) {
+                    openLessonDetail(currentActiveLesson.id);
+                }
             } catch (e) {
                 alert(e.message);
             }
@@ -960,13 +1017,9 @@ function applyBulkImport() {
     let addedCount = 0;
     let exerciseCount = 0;
 
-    // Reset container if user has existing questions
+    // Always reset container when importing
     const container = document.getElementById('hw-questions-builder');
-    if (container.children.length > 0) {
-        if (confirm("Очистить предыдущие вопросы перед импортом новых?")) {
-            container.innerHTML = '';
-        }
-    }
+    container.innerHTML = '';
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -1050,12 +1103,14 @@ function applyBulkImport() {
     }
 }
 
-async function openCreateHomeworkModal() {
+async function openCreateHomeworkModal(targetLessonId = null) {
     triggerHaptic();
     document.getElementById('hw-title-input').value = '';
     document.getElementById('hw-desc-input').value = '';
     document.getElementById('hw-deadline-input').value = '';
     document.getElementById('hw-questions-builder').innerHTML = '';
+    const bulkText = document.getElementById('bulk-import-text');
+    if (bulkText) bulkText.value = '';
     toggleBulkImportPanel(false);
 
     // Populate lessons select
@@ -1064,7 +1119,8 @@ async function openCreateHomeworkModal() {
         const select = document.getElementById('hw-lesson-select');
         select.innerHTML = '<option value="">Без привязки (Самостоятельное ДЗ)</option>';
         res.lessons.forEach(l => {
-            select.innerHTML += `<option value="${l.id}">${l.title}</option>`;
+            const isSelected = targetLessonId && parseInt(targetLessonId) === l.id ? 'selected' : '';
+            select.innerHTML += `<option value="${l.id}" ${isSelected}>${escapeHtml(l.title)}</option>`;
         });
     } catch (e) {
         console.error(e);
@@ -1185,6 +1241,9 @@ async function saveNewHomework() {
         });
         closeModal('modal-create-hw');
         loadHomeworks();
+        if (lessonId && currentActiveLesson && currentActiveLesson.id === parseInt(lessonId)) {
+            openLessonDetail(parseInt(lessonId));
+        }
     } catch (e) {
         alert(e.message);
     }

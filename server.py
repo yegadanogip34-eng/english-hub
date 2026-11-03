@@ -214,6 +214,9 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
         super().end_headers()
 
     def do_OPTIONS(self):
@@ -317,15 +320,26 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_error_json("Урок не найден", 404)
                     return
                 
-                # Fetch homework associated with this lesson
-                hw = conn.execute("SELECT * FROM homeworks WHERE lesson_id = ?", (lesson_id,)).fetchone()
+                # Fetch all homeworks associated with this lesson
+                hws = conn.execute("SELECT * FROM homeworks WHERE lesson_id = ? ORDER BY id ASC", (lesson_id,)).fetchall()
+                hw_list = []
+                for h in hws:
+                    hd = dict(h)
+                    hd['questions'] = json.loads(hd['questions_json'])
+                    if user['role'] == 'student':
+                        sub = conn.execute("SELECT * FROM submissions WHERE homework_id = ? AND student_id = ?",
+                                           (hd['id'], user['id'])).fetchone()
+                        if sub:
+                            sub_dict = dict(sub)
+                            sub_dict['answers'] = json.loads(sub_dict['answers_json'])
+                            hd['my_submission'] = sub_dict
+                    hw_list.append(hd)
                 conn.close()
                 
                 res = dict(lesson)
                 res['blocks'] = json.loads(res['blocks_json'])
-                res['homework'] = dict(hw) if hw else None
-                if res['homework']:
-                    res['homework']['questions'] = json.loads(res['homework']['questions_json'])
+                res['homeworks'] = hw_list
+                res['homework'] = hw_list[0] if hw_list else None
                 self.send_json({"lesson": res})
                 return
 
