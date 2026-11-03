@@ -718,6 +718,7 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
         # DELETE /api/homeworks/<id>
         if path.startswith('/api/homeworks/'):
             hw_id = int(path.split('/')[-1])
+            conn.execute("DELETE FROM submissions WHERE homework_id = ?", (hw_id,))
             conn.execute("DELETE FROM homeworks WHERE id = ?", (hw_id,))
             conn.commit()
             conn.close()

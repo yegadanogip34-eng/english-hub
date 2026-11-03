@@ -408,6 +408,25 @@
             </div>
         </div>
 
+        <!-- 6. MODAL: CONFIRM ACTION DIALOG (100% WORKING IN TELEGRAM WEBVIEW) -->
+        <div id="modal-confirm" class="modal-overlay hidden" style="z-index: 250;">
+            <div class="modal-sheet" style="max-width: 380px; text-align: center; padding: 22px; border-radius: var(--radius-lg); margin: auto;">
+                <div style="font-size: 2.4rem; margin-bottom: 10px;">🗑️</div>
+                <h3 id="confirm-modal-title" style="font-size: 1.15rem; font-weight: 800; margin-bottom: 6px;">Удалить?</h3>
+                <p id="confirm-modal-text" style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.4;">
+                    Вы действительно хотите выполнить это действие?
+                </p>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn-secondary" style="flex: 1;" onclick="closeModal('modal-confirm')">
+                        Отмена
+                    </button>
+                    <button type="button" id="btn-confirm-accept" class="btn-primary" style="flex: 1; background: #ef4444; border-color: #ef4444;">
+                        Да, удалить
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Application Engine -->

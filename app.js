@@ -386,16 +386,45 @@ async function openLessonDetail(lessonId) {
     }
 }
 
-async function deleteLesson(lessonId) {
-    if (confirm("Вы уверены, что хотите удалить этот урок?")) {
-        triggerHaptic();
-        try {
-            await apiRequest(`/api/lessons/${lessonId}`, 'DELETE');
-            loadLessons();
-        } catch (e) {
-            alert(e.message);
-        }
+let pendingConfirmCallback = null;
+
+function showConfirmDialog(title, text, onConfirm) {
+    triggerHaptic('warning');
+    const modal = document.getElementById('modal-confirm');
+    if (!modal) {
+        if (confirm(text)) onConfirm();
+        return;
     }
+    document.getElementById('confirm-modal-title').innerText = title || "Удаление";
+    document.getElementById('confirm-modal-text').innerText = text;
+    pendingConfirmCallback = onConfirm;
+    
+    const acceptBtn = document.getElementById('btn-confirm-accept');
+    acceptBtn.onclick = async () => {
+        closeModal('modal-confirm');
+        if (pendingConfirmCallback) {
+            await pendingConfirmCallback();
+            pendingConfirmCallback = null;
+        }
+    };
+    
+    modal.classList.remove('hidden');
+}
+
+function deleteLesson(lessonId) {
+    showConfirmDialog(
+        "Удалить урок?",
+        "Вы уверены, что хотите удалить этот урок и все его материалы?",
+        async () => {
+            triggerHaptic();
+            try {
+                await apiRequest(`/api/lessons/${lessonId}`, 'DELETE');
+                loadLessons();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+    );
 }
 
 // --- LESSON BUILDER ---
@@ -866,16 +895,20 @@ async function submitHomeworkAnswers() {
     }
 }
 
-async function deleteHomework(hwId) {
-    if (confirm("Вы уверены, что хотите удалить это задание?")) {
-        triggerHaptic();
-        try {
-            await apiRequest(`/api/homeworks/${hwId}`, 'DELETE');
-            loadHomeworks();
-        } catch (e) {
-            alert(e.message);
+function deleteHomework(hwId) {
+    showConfirmDialog(
+        "Удалить задание?",
+        "Вы уверены, что хотите удалить это домашнее задание?",
+        async () => {
+            triggerHaptic();
+            try {
+                await apiRequest(`/api/homeworks/${hwId}`, 'DELETE');
+                loadHomeworks();
+            } catch (e) {
+                alert(e.message);
+            }
         }
-    }
+    );
 }
 
 // --- HOMEWORK BUILDER & BULK IMPORT ---
