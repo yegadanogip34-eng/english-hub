@@ -18,8 +18,18 @@ if (tg) {
 }
 
 function triggerHaptic(type = 'medium') {
-    if (tg && tg.HapticFeedback) {
-        tg.HapticFeedback.impactOccurred(type);
+    try {
+        if (tg && tg.HapticFeedback) {
+            if (type === 'warning' || type === 'error' || type === 'success') {
+                tg.HapticFeedback.notificationOccurred(type);
+            } else if (['light', 'medium', 'heavy', 'rigid', 'soft'].includes(type)) {
+                tg.HapticFeedback.impactOccurred(type);
+            } else {
+                tg.HapticFeedback.impactOccurred('medium');
+            }
+        }
+    } catch (e) {
+        // Silently catch to never break UI flow
     }
 }
 
@@ -333,8 +343,14 @@ async function openLessonDetail(lessonId) {
             } else if (block.type === 'image') {
                 blocksHtml += `
                     <div class="lesson-content-block">
-                        <img src="${block.url}" class="lesson-image" alt="Иллюстрация к уроку">
-                        ${block.caption ? `<div style="font-size: 0.8rem; color: var(--text-secondary); text-align: center;">🖼️ ${block.caption}</div>` : ''}
+                        <img src="${block.url}" class="lesson-image" alt="Иллюстрация к уроку" referrerpolicy="no-referrer"
+                             onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');">
+                        <div class="image-load-fallback hidden" style="padding: 16px 14px; background: var(--bg-card); border: 2px dashed var(--border-color); border-radius: var(--radius-md); text-align: center; color: var(--text-secondary); margin: 8px 0;">
+                            <div style="font-size: 1.6rem; margin-bottom: 4px;">🖼️</div>
+                            <div style="font-weight: 700; margin-bottom: 4px; color: var(--text-primary); font-size: 0.95rem;">Изображение по внешней ссылке недоступно</div>
+                            <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.35;">Сайт-источник заблокировал прямую загрузку картинки.<br>Рекомендуется при создании урока использовать «📁 Загрузить с устройства» — тогда файл сохраняется прямо в уроке и откроется всегда.</div>
+                        </div>
+                        ${block.caption ? `<div style="font-size: 0.82rem; color: var(--text-secondary); text-align: center; margin-top: 6px;">🖼️ ${escapeHtml(block.caption)}</div>` : ''}
                     </div>
                 `;
             } else if (block.type === 'vocab') {
@@ -425,9 +441,14 @@ async function openLessonDetail(lessonId) {
         container.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <span class="level-tag">${lesson.level || 'All Levels'}</span>
-                <span style="font-size: 0.8rem; color: var(--text-muted);">${new Date(lesson.created_at).toLocaleDateString('ru-RU')}</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">${new Date(lesson.created_at).toLocaleDateString('ru-RU')}</span>
+                    ${currentUser && currentUser.role === 'teacher' ? `
+                        <button type="button" class="btn-icon btn-sm btn-danger" title="Удалить этот урок" onclick="deleteLesson(${lesson.id})">🗑️</button>
+                    ` : ''}
+                </div>
             </div>
-            <h2 style="font-size: 1.35rem; font-weight: 800; margin-bottom: 14px; line-height: 1.35;">${lesson.title}</h2>
+            <h2 style="font-size: 1.35rem; font-weight: 800; margin-bottom: 14px; line-height: 1.35;">${escapeHtml(lesson.title)}</h2>
             <div class="lesson-body">${blocksHtml}</div>
             ${hwSectionHtml}
         `;
@@ -452,11 +473,13 @@ function showConfirmDialog(title, text, onConfirm) {
     pendingConfirmCallback = onConfirm;
     
     const acceptBtn = document.getElementById('btn-confirm-accept');
-    acceptBtn.onclick = async () => {
+    acceptBtn.onclick = async (e) => {
+        if (e) e.stopPropagation();
         closeModal('modal-confirm');
         if (pendingConfirmCallback) {
-            await pendingConfirmCallback();
+            const cb = pendingConfirmCallback;
             pendingConfirmCallback = null;
+            await cb();
         }
     };
     
@@ -471,7 +494,9 @@ function deleteLesson(lessonId) {
             triggerHaptic();
             try {
                 await apiRequest(`/api/lessons/${lessonId}`, 'DELETE');
-                loadLessons();
+                currentActiveLesson = null;
+                showScreen('screen-lessons');
+                await loadLessons();
             } catch (e) {
                 alert(e.message);
             }
@@ -526,11 +551,24 @@ function addLessonBlock(type) {
         `;
     } else if (type === 'image') {
         innerContent = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 0.8rem; font-weight: 700; color: #059669;">🖼️ Изображение</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 0.82rem; font-weight: 700; color: #059669;">🖼️ Изображение</span>
                 <button type="button" class="btn-icon btn-sm btn-danger" onclick="removeBlockElement('block-${id}')">✕</button>
             </div>
-            <input type="text" class="form-input block-data-url" placeholder="URL картинки (например, https://example.com/img.jpg)" style="margin-bottom: 8px;">
+            
+            <div style="background: var(--bg-main); border: 1px dashed var(--primary); border-radius: 8px; padding: 10px; margin-bottom: 8px; text-align: center;">
+                <label style="cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; font-weight: 600; font-size: 0.86rem; color: var(--primary);">
+                    <span>📁 Загрузить картинку с устройства</span>
+                    <span style="font-size: 0.72rem; font-weight: 400; color: var(--text-muted);">(JPG, PNG, WEBP — гарантированно откроется)</span>
+                    <input type="file" accept="image/*" style="display: none;" onchange="handleImageBlockFileUpload(this, 'block-${id}')">
+                </label>
+            </div>
+
+            <div class="block-image-preview-wrapper hidden" style="margin-bottom: 8px; text-align: center;">
+                <img class="block-image-preview" src="" style="max-height: 140px; border-radius: 8px; border: 1px solid var(--border-color); object-fit: contain; width: 100%;">
+            </div>
+
+            <input type="text" class="form-input block-data-url" placeholder="Или вставьте прямую ссылку (https://...)" style="margin-bottom: 8px;" oninput="previewBlockImageUrl(this, 'block-${id}')">
             <input type="text" class="form-input block-data-caption" placeholder="Подпись к изображению (необязательно)">
         `;
     } else if (type === 'vocab') {
@@ -552,6 +590,38 @@ function addLessonBlock(type) {
 function removeBlockElement(elementId) {
     const el = document.getElementById(elementId);
     if (el) el.remove();
+}
+
+function handleImageBlockFileUpload(inputEl, blockId) {
+    if (!inputEl.files || !inputEl.files[0]) return;
+    const file = inputEl.files[0];
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const blockEl = document.getElementById(blockId);
+        if (!blockEl) return;
+        const urlInput = blockEl.querySelector('.block-data-url');
+        const previewWrap = blockEl.querySelector('.block-image-preview-wrapper');
+        const previewImg = blockEl.querySelector('.block-image-preview');
+        
+        urlInput.value = e.target.result;
+        previewImg.src = e.target.result;
+        previewWrap.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+}
+
+function previewBlockImageUrl(inputEl, blockId) {
+    const blockEl = document.getElementById(blockId);
+    if (!blockEl) return;
+    const previewWrap = blockEl.querySelector('.block-image-preview-wrapper');
+    const previewImg = blockEl.querySelector('.block-image-preview');
+    const val = inputEl.value.trim();
+    if (val && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:image/'))) {
+        previewImg.src = val;
+        previewWrap.classList.remove('hidden');
+    } else {
+        previewWrap.classList.add('hidden');
+    }
 }
 
 async function saveNewLesson() {

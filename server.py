@@ -221,6 +221,7 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(200)
+        self.send_header('Content-Length', '0')
         self.end_headers()
 
     def get_auth_user(self):
@@ -724,6 +725,7 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
         if path.startswith('/api/lessons/'):
             lesson_id = int(path.split('/')[-1])
             conn.execute("DELETE FROM lessons WHERE id = ?", (lesson_id,))
+            conn.execute("UPDATE homeworks SET lesson_id = NULL WHERE lesson_id = ?", (lesson_id,))
             conn.commit()
             conn.close()
             self.send_json({"message": "Урок удален"})
