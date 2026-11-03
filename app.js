@@ -600,7 +600,7 @@ async function loadHomeworks() {
                 actionBtn = `
                     <div style="display: flex; gap: 8px;">
                         <button class="btn-secondary btn-sm" onclick="switchNavTab('reviews')">К проверке →</button>
-                        <button class="btn-icon btn-sm btn-danger" onclick="deleteHomework(${hw.id})">🗑️</button>
+                        <button type="button" class="btn-icon btn-sm btn-danger" onclick="event.stopPropagation(); deleteHomework(${hw.id})" title="Удалить">🗑️</button>
                     </div>
                 `;
             }
