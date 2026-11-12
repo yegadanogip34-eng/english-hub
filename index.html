@@ -6,7 +6,7 @@
     <title>English Tutor - Telegram LMS</title>
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="style.css?v=20261104_4">
+    <link rel="stylesheet" href="style.css?v=20261112_1">
 </head>
 <body>
     <div id="app-container">
@@ -21,6 +21,7 @@
                 </div>
             </div>
             <div class="user-badge" id="header-actions">
+                <button class="btn-icon" id="btn-refresh" title="Обновить данные" onclick="refreshAppData()" style="font-size: 1.05rem;">🔄</button>
                 <span id="role-pill-display" class="role-pill hidden"></span>
                 <button class="btn-icon" id="btn-logout" title="Выйти / Сменить аккаунт" onclick="logout()">🚪</button>
             </div>
@@ -45,7 +46,7 @@
                         <span>✨</span> Вход для Ученика по офферу
                     </h3>
                     <div class="alert-box info" style="margin-bottom: 14px;">
-                        Вы перешли по персональной ссылке-приглашению. Пожалуйста, введите ваше имя для старта.
+                        Вы перешли по персональной ссылке-приглашению. Введите имя, чтобы начать обучение или войти в свой кабинет.
                     </div>
                     <div class="form-group">
                         <label class="form-label">Код приглашения</label>
@@ -58,6 +59,29 @@
                     <button class="btn-primary" style="width: 100%;" onclick="joinByInvite()">
                         Войти в учебный класс 🚀
                     </button>
+                    <div style="text-align: center; margin-top: 12px;">
+                        <button type="button" class="btn-secondary btn-sm" style="font-size: 0.8rem;" onclick="toggleStudentLoginBox(true)">
+                            👤 Уже занимались ранее? Нажмите здесь
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Student Direct Login Box -->
+                <div id="student-login-box" class="card hidden" style="margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="font-size: 1rem; font-weight: 700;">👤 Вход для зарегистрированных учеников</h4>
+                        <button type="button" class="btn-icon btn-sm" onclick="toggleStudentLoginBox(false)">✕</button>
+                    </div>
+                    <p style="font-size: 0.84rem; color: var(--text-secondary); margin-bottom: 12px;">
+                        Если вы уже вводили инвайт ранее, введите ваше имя для быстрого входа в личный кабинет:
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label">Ваше Имя</label>
+                        <input type="text" id="student-login-name" class="form-input" placeholder="Имя, под которым регистрировались">
+                    </div>
+                    <button class="btn-primary" style="width: 100%;" onclick="submitStudentLogin()">
+                        Войти в мой кабинет 🚀
+                    </button>
                 </div>
 
                 <!-- No-Invite Gate Card (Default view if no offer) -->
@@ -69,6 +93,7 @@
                     </p>
                     <div style="display: flex; gap: 10px; flex-direction: column;">
                         <button class="btn-primary" onclick="showInviteInputPrompt()">Ввести инвайт-код</button>
+                        <button class="btn-secondary" onclick="toggleStudentLoginBox(true)">Я уже ученик (Войти по имени)</button>
                     </div>
                 </div>
 
@@ -193,6 +218,119 @@
                 </div>
             </section>
 
+            <!-- 7. SCREEN: PROFILE / ЛИЧНЫЙ КАБИНЕТ -->
+            <section id="screen-profile" class="screen">
+                <div class="profile-header-card card" style="display: flex; align-items: center; gap: 14px; padding: 18px;">
+                    <div class="profile-avatar" id="prof-avatar-letter" style="width: 52px; height: 52px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 800; flex-shrink: 0; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);">
+                        🎓
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <h2 style="font-size: 1.15rem; font-weight: 800; margin: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" id="prof-full-name">Загрузка...</h2>
+                            <span id="prof-role-badge" class="role-pill">Ученик</span>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;" id="prof-telegram-meta">Дистанционное обучение</div>
+                    </div>
+                </div>
+
+                <!-- Student Progress & History Section -->
+                <div id="prof-student-section">
+                    <div class="section-header" style="margin-top: 20px;">
+                        <div>
+                            <h3 class="section-title" style="font-size: 1.05rem;">📊 Мой Прогресс</h3>
+                            <div class="section-subtitle">Ваши успехи в изучении английского языка</div>
+                        </div>
+                    </div>
+                    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;">
+                        <div class="card" style="padding: 14px; text-align: center;">
+                            <div style="font-size: 1.6rem; font-weight: 800; color: var(--primary);" id="prof-stat-lessons">0</div>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">📚 Уроков доступно</div>
+                        </div>
+                        <div class="card" style="padding: 14px; text-align: center;">
+                            <div style="font-size: 1.6rem; font-weight: 800; color: #0284c7;" id="prof-stat-submitted">0</div>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">✍️ Сдано заданий</div>
+                        </div>
+                        <div class="card" style="padding: 14px; text-align: center;">
+                            <div style="font-size: 1.6rem; font-weight: 800; color: #16a34a;" id="prof-stat-reviewed">0</div>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">🟢 Проверено учителем</div>
+                        </div>
+                        <div class="card" style="padding: 14px; text-align: center;">
+                            <div style="font-size: 1.6rem; font-weight: 800; color: #f59e0b;" id="prof-stat-score">—</div>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">⭐ Средний балл</div>
+                        </div>
+                    </div>
+
+                    <div class="section-header">
+                        <div>
+                            <h3 class="section-title" style="font-size: 1.05rem;">📝 Сданные Работы и Оценки</h3>
+                            <div class="section-subtitle">Проверки и рекомендации от преподавателя</div>
+                        </div>
+                    </div>
+                    <div id="prof-submissions-history">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+
+                <!-- Teacher Overview & Backup Tools -->
+                <div id="prof-teacher-section" class="hidden">
+                    <div class="section-header" style="margin-top: 20px;">
+                        <div>
+                            <h3 class="section-title" style="font-size: 1.05rem;">📊 Сводка Курса</h3>
+                            <div class="section-subtitle">Общие показатели учебного класса</div>
+                        </div>
+                    </div>
+                    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;">
+                        <div class="card" style="padding: 14px; text-align: center;">
+                            <div style="font-size: 1.6rem; font-weight: 800; color: var(--primary);" id="prof-teach-students">0</div>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">👥 Всего учеников</div>
+                        </div>
+                        <div class="card" style="padding: 14px; text-align: center;">
+                            <div style="font-size: 1.6rem; font-weight: 800; color: #0284c7;" id="prof-teach-lessons">0</div>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">📚 Всего уроков</div>
+                        </div>
+                        <div class="card" style="padding: 14px; text-align: center;">
+                            <div style="font-size: 1.6rem; font-weight: 800; color: #16a34a;" id="prof-teach-hw">0</div>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">✍️ Домашних заданий</div>
+                        </div>
+                        <div class="card" style="padding: 14px; text-align: center;">
+                            <div style="font-size: 1.6rem; font-weight: 800; color: #ef4444;" id="prof-teach-pending">0</div>
+                            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">🟡 Ждут проверки</div>
+                        </div>
+                    </div>
+
+                    <!-- Cloud Database Backup & Restore Tool -->
+                    <div class="card" style="margin-top: 14px; border: 1px dashed var(--primary); padding: 16px;">
+                        <h4 style="font-size: 0.98rem; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                            <span>💾</span> Сохранение Данных и Бэкап
+                        </h4>
+                        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.4;">
+                            Все уроки, задания и ответы автоматически сохраняются на сервере. Скачайте файл резервной копии, чтобы при любых обновлениях сервера восстановить класс в один клик.
+                        </p>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn-secondary btn-sm" onclick="downloadDatabaseBackup()" style="flex: 1; min-width: 140px;">
+                                📥 Скачать бэкап (JSON)
+                            </button>
+                            <label class="btn-secondary btn-sm" style="flex: 1; min-width: 140px; text-align: center; cursor: pointer;">
+                                📤 Восстановить из файла
+                                <input type="file" accept=".json" style="display: none;" onchange="uploadDatabaseBackup(this)">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Account Actions Card -->
+                <div class="card" style="margin-top: 20px;">
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <button class="btn-primary" onclick="refreshAppData()" style="width: 100%;">
+                            🔄 Обновить все данные платформы
+                        </button>
+                        <button class="btn-secondary" onclick="logout()" style="width: 100%; color: #ef4444; border-color: rgba(239, 68, 68, 0.3);">
+                            🚪 Сменить аккаунт / Выйти
+                        </button>
+                    </div>
+                </div>
+            </section>
+
         </main>
 
         <!-- BOTTOM NAVIGATION (TABS) -->
@@ -212,6 +350,10 @@
             <button class="nav-item teacher-only hidden" onclick="switchNavTab('students')">
                 <span class="nav-icon">🔗</span>
                 <span>Офферы</span>
+            </button>
+            <button class="nav-item" onclick="switchNavTab('profile')">
+                <span class="nav-icon">👤</span>
+                <span>Кабинет</span>
             </button>
         </nav>
 
@@ -430,6 +572,6 @@
     </div>
 
     <!-- Application Engine -->
-    <script src="app.js?v=20261104_4"></script>
+    <script src="app.js?v=20261112_1"></script>
 </body>
 </html>

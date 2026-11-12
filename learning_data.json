@@ -1,0 +1,93 @@
+{
+  "lessons": [
+    {
+      "id": 2,
+      "title": "Алфавит",
+      "level": "A1 (Beginner)",
+      "description": "Английский алфавит",
+      "blocks_json": "[{\"type\": \"text\", \"content\": \"Aa Bb\"}]",
+      "order_index": 0,
+      "created_at": "2026-11-02T23:56:34.335655"
+    }
+  ],
+  "homeworks": [
+    {
+      "id": 1,
+      "lesson_id": 1,
+      "title": "ДЗ: Отработка Present Simple и Continuous",
+      "description": "Выполните 3 практических упражнения по материалам пройденного урока.",
+      "deadline": "Без жесткого дедлайна",
+      "questions_json": "[{\"id\": 1, \"type\": \"text\", \"text\": \"Раскройте скобки: 'Listen! Somebody (sing) a wonderful song.' Объясните ваш выбор.\", \"sample\": \"is singing, так как слово 'Listen!' указывает на действие в момент речи.\"}, {\"id\": 2, \"type\": \"translate\", \"text\": \"Переведите на английский: 'Я обычно пью кофе по утрам, но сегодня я пью зеленый чай.'\", \"sample\": \"I usually drink coffee in the morning, but today I am drinking green tea.\"}, {\"id\": 3, \"type\": \"choice\", \"text\": \"Какое предложение грамматически корректно?\", \"options\": [\"I am knowing this grammar rule very well.\", \"I know this grammar rule very well.\", \"I knows this grammar rule very well.\"], \"sample\": \"I know this grammar rule very well.\"}]",
+      "created_at": "2026-11-02T23:51:36.635881"
+    },
+    {
+      "id": 2,
+      "lesson_id": null,
+      "title": "To be verbs",
+      "description": "Упражнение 1. Быстрая связка (Вставьте am, is или are)Задача ученика — довести выбор глагола до рефлекса, глядя только на первое слово.\nУпражнение 2. Переделайте в краткую форму (Сокращения)Пусть ученик перепишет и вслух прочитает слитно, как в живой речи.Пример: I am here -> I’m here. He is not ready -> He isn’t ready.\nУпражнение 3. Соберите предложение из слов (Порядок слов)Слова перепутаны. Нужно расставить их так, чтобы получился правильный вопрос, утверждение или отрицание.\nУпражнение 4. Найдите и исправьте ошибку (В каждом предложении одна)Отличное задание на внимательность: ученик сам начинает замечать несостыковки.",
+      "deadline": "",
+      "questions_json": "[{\"id\": 2, \"text\": \"I ___ fine.\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 3, \"text\": \"He ___ busy.\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 4, \"text\": \"They ___ at home.\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 5, \"text\": \"You ___ right.\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 6, \"text\": \"She ___ tired.\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 7, \"text\": \"We ___ ready.\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 8, \"text\": \"It ___ new.\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 9, \"text\": \"This ___ good, and that ___ old.\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 10, \"text\": \"These ___ here, and those ___ there.\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 11, \"text\": \"Who ___ there?\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 12, \"text\": \"She is happy. -> _______________\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 13, \"text\": \"We are not late. -> _______________\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 14, \"text\": \"I am not sad. -> _______________\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 15, \"text\": \"They are at work. -> _______________\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 16, \"text\": \"It is not ok. -> _______________\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 17, \"text\": \"You are wrong. -> _______________\", \"type\": \"gap_fill\", \"correct\": \"\"}, {\"id\": 18, \"text\": \"He is 25. -> _______________\", \"type\": \"gap_fill\", \"correct\": \"\"}]",
+      "created_at": "2026-11-03T19:19:55.685645"
+    }
+  ],
+  "users": [
+    {
+      "id": 1,
+      "role": "teacher",
+      "username": "teacher",
+      "password_hash": "cde383eee8ee7a4400adf7a15f716f179a2eb97646b37e089eb8d6d04e663416",
+      "full_name": "Преподаватель English",
+      "telegram_id": null,
+      "created_at": "2026-11-02T23:51:36.633881"
+    },
+    {
+      "id": 2,
+      "role": "student",
+      "username": "student_7262c3dc",
+      "password_hash": null,
+      "full_name": "????????? ??????",
+      "telegram_id": "",
+      "created_at": "2026-11-02T23:52:12.499436"
+    },
+    {
+      "id": 3,
+      "role": "student",
+      "username": "student_9647aa7c",
+      "password_hash": null,
+      "full_name": "Алексей Олегович",
+      "telegram_id": "",
+      "created_at": "2026-11-03T19:21:23.565460"
+    }
+  ],
+  "invites": [
+    {
+      "code": "WELCOME2026",
+      "student_name": "Новый Ученик",
+      "max_uses": 100,
+      "used_count": 1,
+      "created_at": "2026-11-02T23:51:36.634882"
+    },
+    {
+      "code": "BELTICQ0",
+      "student_name": "??????? ?. (?????????????)",
+      "max_uses": 5,
+      "used_count": 0,
+      "created_at": "2026-11-02T23:52:43.728554"
+    },
+    {
+      "code": "HBE5N1WF",
+      "student_name": "Новый ученик",
+      "max_uses": 10,
+      "used_count": 0,
+      "created_at": "2026-11-03T19:20:27.980803"
+    },
+    {
+      "code": "AHSANMXZ",
+      "student_name": "Алексей",
+      "max_uses": 10,
+      "used_count": 1,
+      "created_at": "2026-11-03T19:20:34.815917"
+    }
+  ],
+  "submissions": []
+}

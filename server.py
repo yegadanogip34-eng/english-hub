@@ -12,6 +12,7 @@ from datetime import datetime
 PORT = int(os.environ.get("PORT", 8000))
 DB_FILE = "learning.db"
 UPLOAD_DIR = "uploads"
+BACKUP_FILE = "learning_data.json"
 
 # --- DATABASE SETUP ---
 def get_db():
@@ -21,6 +22,73 @@ def get_db():
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+def sync_data_backup():
+    try:
+        conn = get_db()
+        data = {
+            "lessons": [dict(r) for r in conn.execute("SELECT * FROM lessons ORDER BY id ASC").fetchall()],
+            "homeworks": [dict(r) for r in conn.execute("SELECT * FROM homeworks ORDER BY id ASC").fetchall()],
+            "users": [dict(r) for r in conn.execute("SELECT id, role, username, password_hash, full_name, telegram_id, created_at FROM users").fetchall()],
+            "invites": [dict(r) for r in conn.execute("SELECT * FROM invites").fetchall()],
+            "submissions": [dict(r) for r in conn.execute("SELECT * FROM submissions ORDER BY id ASC").fetchall()]
+        }
+        conn.close()
+        with open(BACKUP_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Backup sync warning: {e}")
+
+def restore_data_from_dict(data):
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        for u in data.get('users', []):
+            existing = c.execute("SELECT id FROM users WHERE id = ?", (u['id'],)).fetchone()
+            if not existing:
+                c.execute("""
+                    INSERT INTO users (id, role, username, password_hash, full_name, telegram_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (u['id'], u['role'], u.get('username'), u.get('password_hash'), u['full_name'], u.get('telegram_id'), u.get('created_at', datetime.now().isoformat())))
+            elif u.get('telegram_id'):
+                c.execute("UPDATE users SET telegram_id = ? WHERE id = ?", (u['telegram_id'], u['id']))
+
+        for inv in data.get('invites', []):
+            existing = c.execute("SELECT code FROM invites WHERE code = ?", (inv['code'],)).fetchone()
+            if not existing:
+                c.execute("""
+                    INSERT INTO invites (code, student_name, max_uses, used_count, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (inv['code'], inv['student_name'], inv.get('max_uses', 10), inv.get('used_count', 0), inv.get('created_at', datetime.now().isoformat())))
+
+        for l in data.get('lessons', []):
+            existing = c.execute("SELECT id FROM lessons WHERE id = ?", (l['id'],)).fetchone()
+            if not existing:
+                c.execute("""
+                    INSERT INTO lessons (id, title, level, description, blocks_json, order_index, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (l['id'], l['title'], l.get('level', 'All Levels'), l.get('description', ''), l['blocks_json'], l.get('order_index', 0), l.get('created_at', datetime.now().isoformat())))
+
+        for h in data.get('homeworks', []):
+            existing = c.execute("SELECT id FROM homeworks WHERE id = ?", (h['id'],)).fetchone()
+            if not existing:
+                c.execute("""
+                    INSERT INTO homeworks (id, lesson_id, title, description, deadline, questions_json, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (h['id'], h.get('lesson_id'), h['title'], h.get('description', ''), h.get('deadline', ''), h['questions_json'], h.get('created_at', datetime.now().isoformat())))
+
+        for s in data.get('submissions', []):
+            existing = c.execute("SELECT id FROM submissions WHERE id = ?", (s['id'],)).fetchone()
+            if not existing:
+                c.execute("""
+                    INSERT INTO submissions (id, homework_id, student_id, answers_json, status, score, feedback, submitted_at, reviewed_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (s['id'], s['homework_id'], s['student_id'], s['answers_json'], s.get('status', 'submitted'), s.get('score'), s.get('feedback'), s.get('submitted_at'), s.get('reviewed_at')))
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Restore error: {e}")
 
 def init_db():
     conn = get_db()
@@ -207,6 +275,18 @@ def init_db():
 
     conn.commit()
     conn.close()
+
+    # Restore from JSON backup if present
+    if os.path.exists(BACKUP_FILE):
+        try:
+            with open(BACKUP_FILE, "r", encoding="utf-8") as f:
+                backup_data = json.load(f)
+                restore_data_from_dict(backup_data)
+                print(f"Data successfully synced from {BACKUP_FILE}")
+        except Exception as e:
+            print(f"Backup restore warning: {e}")
+
+    sync_data_backup()
 
 # --- REQUEST HANDLER ---
 class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
@@ -451,6 +531,81 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json({"students": [dict(s) for s in students]})
                 return
 
+            # GET /api/profile
+            if path == '/api/profile':
+                if not user:
+                    self.send_error_json("Требуется авторизация", 401)
+                    return
+                conn = get_db()
+                total_lessons = conn.execute("SELECT COUNT(*) FROM lessons").fetchone()[0]
+                total_homeworks = conn.execute("SELECT COUNT(*) FROM homeworks").fetchone()[0]
+
+                if user['role'] == 'student':
+                    subs = conn.execute("""
+                        SELECT s.id, s.homework_id, s.status, s.score, s.feedback, s.submitted_at, s.reviewed_at,
+                               h.title as homework_title, l.title as lesson_title
+                        FROM submissions s
+                        JOIN homeworks h ON s.homework_id = h.id
+                        LEFT JOIN lessons l ON h.lesson_id = l.id
+                        WHERE s.student_id = ?
+                        ORDER BY s.submitted_at DESC
+                    """, (user['id'],)).fetchall()
+                    
+                    reviewed_count = sum(1 for s in subs if s['status'] == 'reviewed')
+                    scores = []
+                    for s in subs:
+                        if s['score']:
+                            try:
+                                scores.append(float(str(s['score']).replace(',', '.')))
+                            except ValueError:
+                                pass
+                    avg_score = round(sum(scores) / len(scores), 1) if scores else None
+
+                    conn.close()
+                    self.send_json({
+                        "user": user,
+                        "stats": {
+                            "total_lessons": total_lessons,
+                            "total_homeworks": total_homeworks,
+                            "submitted_count": len(subs),
+                            "reviewed_count": reviewed_count,
+                            "pending_count": len(subs) - reviewed_count,
+                            "avg_score": avg_score
+                        },
+                        "submissions": [dict(s) for s in subs]
+                    })
+                    return
+                else:
+                    total_students = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'student'").fetchone()[0]
+                    pending_reviews = conn.execute("SELECT COUNT(*) FROM submissions WHERE status = 'submitted'").fetchone()[0]
+                    total_invites = conn.execute("SELECT COUNT(*) FROM invites").fetchone()[0]
+                    conn.close()
+                    self.send_json({
+                        "user": user,
+                        "stats": {
+                            "total_students": total_students,
+                            "total_lessons": total_lessons,
+                            "total_homeworks": total_homeworks,
+                            "pending_reviews": pending_reviews,
+                            "total_invites": total_invites
+                        }
+                    })
+                    return
+
+            # GET /api/backup (Teacher only)
+            if path == '/api/backup':
+                if not user or user['role'] != 'teacher':
+                    self.send_error_json("Доступ запрещен", 403)
+                    return
+                sync_data_backup()
+                if os.path.exists(BACKUP_FILE):
+                    with open(BACKUP_FILE, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    self.send_json(data)
+                else:
+                    self.send_error_json("Бэкап не найден", 404)
+                return
+
             self.send_error_json("API эндпоинт не найден", 404)
             return
 
@@ -494,6 +649,72 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
+        # POST /api/auth/telegram-auto (Automatic seamless login for Telegram users)
+        if path == '/api/auth/telegram-auto':
+            telegram_id = str(body.get('telegram_id', '')).strip() if body else ''
+            if not telegram_id:
+                self.send_error_json("Telegram ID не указан", 400)
+                return
+            conn = get_db()
+            user_row = conn.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)).fetchone()
+            if not user_row:
+                conn.close()
+                self.send_json({"found": False})
+                return
+            
+            token = secrets.token_hex(24)
+            conn.execute("INSERT INTO sessions (token, user_id, role, created_at) VALUES (?, ?, ?, ?)",
+                         (token, user_row['id'], user_row['role'], datetime.now().isoformat()))
+            conn.commit()
+            conn.close()
+            self.send_json({
+                "found": True,
+                "token": token,
+                "user": {
+                    "id": user_row['id'],
+                    "role": user_row['role'],
+                    "full_name": user_row['full_name'],
+                    "telegram_id": user_row['telegram_id'],
+                    "username": user_row['username']
+                }
+            })
+            return
+
+        # POST /api/auth/student-login (Student login by Name without code)
+        if path == '/api/auth/student-login':
+            full_name = body.get('full_name', '').strip() if body else ''
+            telegram_id = str(body.get('telegram_id', '')).strip() if body else ''
+            if not full_name:
+                self.send_error_json("Введите ваше имя", 400)
+                return
+            conn = get_db()
+            user_row = conn.execute("SELECT * FROM users WHERE LOWER(full_name) = LOWER(?) AND role = 'student'", (full_name,)).fetchone()
+            if not user_row:
+                conn.close()
+                self.send_error_json("Ученик с таким именем не найден. Пожалуйста, используйте ссылку-приглашение от преподавателя.", 404)
+                return
+            
+            if telegram_id and not user_row['telegram_id']:
+                conn.execute("UPDATE users SET telegram_id = ? WHERE id = ?", (telegram_id, user_row['id']))
+
+            token = secrets.token_hex(24)
+            conn.execute("INSERT INTO sessions (token, user_id, role, created_at) VALUES (?, ?, 'student', ?)",
+                         (token, user_row['id'], datetime.now().isoformat()))
+            conn.commit()
+            conn.close()
+            sync_data_backup()
+            self.send_json({
+                "token": token,
+                "user": {
+                    "id": user_row['id'],
+                    "role": user_row['role'],
+                    "full_name": user_row['full_name'],
+                    "telegram_id": user_row['telegram_id'],
+                    "username": user_row['username']
+                }
+            })
+            return
+
         # POST /api/auth/invite-join (Student onboarding via offer link)
         if path == '/api/auth/invite-join':
             if not body or 'code' not in body or 'full_name' not in body:
@@ -501,7 +722,7 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
                 return
             code = body['code'].strip().upper()
             full_name = body['full_name'].strip()
-            telegram_id = body.get('telegram_id', '')
+            telegram_id = str(body.get('telegram_id', '')).strip()
 
             if not full_name:
                 self.send_error_json("Пожалуйста, введите ваше имя", 400)
@@ -514,38 +735,42 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error_json("Приглашение недействительно или код введен с ошибкой", 404)
                 return
 
-            if invite['used_count'] >= invite['max_uses']:
-                conn.close()
-                self.send_error_json("Лимит активаций этого приглашения исчерпан", 403)
-                return
+            # Check if this student is already registered by telegram_id or full_name
+            existing = None
+            if telegram_id:
+                existing = conn.execute("SELECT * FROM users WHERE telegram_id = ? AND role = 'student'", (telegram_id,)).fetchone()
+            if not existing:
+                existing = conn.execute("SELECT * FROM users WHERE LOWER(full_name) = LOWER(?) AND role = 'student'", (full_name,)).fetchone()
 
-            # Register student user
             c = conn.cursor()
-            unique_uname = f"student_{secrets.token_hex(4)}"
-            c.execute("""
-                INSERT INTO users (role, username, full_name, telegram_id, created_at)
-                VALUES ('student', ?, ?, ?, ?)
-            """, (unique_uname, full_name, telegram_id, datetime.now().isoformat()))
-            student_id = c.lastrowid
+            if existing:
+                student_id = existing['id']
+                if telegram_id and existing['telegram_id'] != telegram_id:
+                    c.execute("UPDATE users SET telegram_id = ? WHERE id = ?", (telegram_id, student_id))
+            else:
+                if invite['used_count'] >= invite['max_uses']:
+                    conn.close()
+                    self.send_error_json("Лимит активаций этого приглашения исчерпан", 403)
+                    return
+                unique_uname = f"student_{secrets.token_hex(4)}"
+                c.execute("""
+                    INSERT INTO users (role, username, full_name, telegram_id, created_at)
+                    VALUES ('student', ?, ?, ?, ?)
+                """, (unique_uname, full_name, telegram_id, datetime.now().isoformat()))
+                student_id = c.lastrowid
+                c.execute("UPDATE invites SET used_count = used_count + 1 WHERE code = ?", (code,))
 
-            # Increment invite counter
-            c.execute("UPDATE invites SET used_count = used_count + 1 WHERE code = ?", (code,))
-
-            # Generate session
             token = secrets.token_hex(24)
             c.execute("INSERT INTO sessions (token, user_id, role, created_at) VALUES (?, ?, 'student', ?)",
                       (token, student_id, datetime.now().isoformat()))
             conn.commit()
+            student_row = conn.execute("SELECT id, role, full_name, telegram_id, username FROM users WHERE id = ?", (student_id,)).fetchone()
             conn.close()
+            sync_data_backup()
 
             self.send_json({
                 "token": token,
-                "user": {
-                    "id": student_id,
-                    "role": "student",
-                    "full_name": full_name,
-                    "telegram_id": telegram_id
-                }
+                "user": dict(student_row)
             })
             return
 
@@ -588,6 +813,7 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
             """, (code, student_name, max_uses, datetime.now().isoformat()))
             conn.commit()
             conn.close()
+            sync_data_backup()
             
             self.send_json({"code": code, "student_name": student_name, "max_uses": max_uses})
             return
@@ -615,6 +841,7 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
             lesson_id = c.lastrowid
             conn.commit()
             conn.close()
+            sync_data_backup()
 
             self.send_json({"id": lesson_id, "message": "Урок успешно создан"})
             return
@@ -646,6 +873,7 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
             hw_id = c.lastrowid
             conn.commit()
             conn.close()
+            sync_data_backup()
 
             self.send_json({"id": hw_id, "message": "Домашнее задание успешно создано"})
             return
@@ -684,6 +912,7 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
                 sub_id = c.lastrowid
             conn.commit()
             conn.close()
+            sync_data_backup()
 
             self.send_json({"id": sub_id, "message": "Работа успешно отправлена преподавателю на проверку!"})
             return
@@ -706,8 +935,22 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
             """, (str(score), feedback, datetime.now().isoformat(), sub_id))
             conn.commit()
             conn.close()
+            sync_data_backup()
 
             self.send_json({"message": "Оценка и комментарий сохранены!"})
+            return
+
+        # POST /api/restore (Teacher restores database from JSON backup)
+        if path == '/api/restore':
+            if user['role'] != 'teacher':
+                self.send_error_json("Доступ запрещен", 403)
+                return
+            if not body or not isinstance(body, dict):
+                self.send_error_json("Неверный формат данных бэкапа", 400)
+                return
+            restore_data_from_dict(body)
+            sync_data_backup()
+            self.send_json({"message": "База данных успешно восстановлена из резервной копии!"})
             return
 
         self.send_error_json("Неизвестный POST запрос", 404)
@@ -728,6 +971,7 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
             conn.execute("UPDATE homeworks SET lesson_id = NULL WHERE lesson_id = ?", (lesson_id,))
             conn.commit()
             conn.close()
+            sync_data_backup()
             self.send_json({"message": "Урок удален"})
             return
 
@@ -738,6 +982,7 @@ class LearningLMSHandler(http.server.SimpleHTTPRequestHandler):
             conn.execute("DELETE FROM homeworks WHERE id = ?", (hw_id,))
             conn.commit()
             conn.close()
+            sync_data_backup()
             self.send_json({"message": "Задание удалено"})
             return
 

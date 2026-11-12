@@ -75,17 +75,7 @@ window.onload = async function() {
         }
     }
 
-    if (inviteCode) {
-        // Pre-fill invite code and show invite join box
-        document.getElementById('join-invite-code').value = inviteCode.toUpperCase();
-        document.getElementById('invite-join-box').classList.remove('hidden');
-        document.getElementById('no-invite-box').classList.add('hidden');
-    } else {
-        document.getElementById('invite-join-box').classList.add('hidden');
-        document.getElementById('no-invite-box').classList.remove('hidden');
-    }
-
-    // 2. Check existing session
+    // 2. Check existing token session
     if (currentToken) {
         try {
             const res = await apiRequest('/api/auth/me');
@@ -99,9 +89,77 @@ window.onload = async function() {
         }
     }
 
+    // 3. Seamless Telegram auto-login if student previously joined
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) {
+        try {
+            const autoRes = await apiRequest('/api/auth/telegram-auto', 'POST', {
+                telegram_id: tg.initDataUnsafe.user.id.toString()
+            });
+            if (autoRes.found && autoRes.token) {
+                currentToken = autoRes.token;
+                localStorage.setItem('lms_token', currentToken);
+                currentUser = autoRes.user;
+                setupUserSession();
+                return;
+            }
+        } catch (err) {
+            console.warn("Auto-auth check:", err);
+        }
+    }
+
+    // 4. If invite code is provided
+    if (inviteCode) {
+        document.getElementById('join-invite-code').value = inviteCode.toUpperCase();
+        document.getElementById('invite-join-box').classList.remove('hidden');
+        document.getElementById('no-invite-box').classList.add('hidden');
+        const loginBox = document.getElementById('student-login-box');
+        if (loginBox) loginBox.classList.add('hidden');
+    } else {
+        document.getElementById('invite-join-box').classList.add('hidden');
+        document.getElementById('no-invite-box').classList.remove('hidden');
+    }
+
     // Default screen: Auth
     showScreen('screen-auth');
 };
+
+function toggleStudentLoginBox(show) {
+    triggerHaptic();
+    const box = document.getElementById('student-login-box');
+    if (!box) return;
+    if (typeof show === 'boolean') {
+        if (show) box.classList.remove('hidden');
+        else box.classList.add('hidden');
+    } else {
+        box.classList.toggle('hidden');
+    }
+}
+
+async function submitStudentLogin() {
+    triggerHaptic();
+    const nameInput = document.getElementById('student-login-name');
+    const fullName = nameInput ? nameInput.value.trim() : '';
+    if (!fullName) {
+        alert("Пожалуйста, введите ваше имя.");
+        return;
+    }
+    let telegramId = "";
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        telegramId = tg.initDataUnsafe.user.id.toString();
+    }
+    try {
+        const res = await apiRequest('/api/auth/student-login', 'POST', {
+            full_name: fullName,
+            telegram_id: telegramId
+        });
+        currentToken = res.token;
+        localStorage.setItem('lms_token', currentToken);
+        currentUser = res.user;
+        setupUserSession();
+    } catch (err) {
+        alert(err.message);
+    }
+}
 
 function showInviteInputPrompt() {
     const code = prompt("Введите код приглашения (например, WELCOME2026):");
@@ -175,7 +233,7 @@ async function submitTeacherLogin() {
     }
 }
 
-function setupUserSession() {
+function setupUserSession(shouldSwitchTab = true) {
     // Update Header
     document.getElementById('header-user-status').innerText = currentUser.full_name;
     const roleBadge = document.getElementById('role-pill-display');
@@ -205,21 +263,27 @@ function setupUserSession() {
     // Show bottom nav
     document.getElementById('bottom-nav').classList.remove('hidden');
 
-    // Load initial lessons tab
-    switchNavTab('lessons');
+    // Load initial tab
+    if (shouldSwitchTab) {
+        switchNavTab('lessons');
+    }
 }
 
 function logout() {
-    if (confirm("Вы действительно хотите выйти из профиля?")) {
-        triggerHaptic();
-        localStorage.removeItem('lms_token');
-        currentToken = null;
-        currentUser = null;
-        document.getElementById('bottom-nav').classList.add('hidden');
-        document.getElementById('role-pill-display').classList.add('hidden');
-        document.getElementById('header-user-status').innerText = "Дистанционное обучение";
-        showScreen('screen-auth');
-    }
+    showConfirmDialog(
+        "Выход из аккаунта",
+        "Вы действительно хотите выйти из своего профиля?",
+        () => {
+            triggerHaptic();
+            localStorage.removeItem('lms_token');
+            currentToken = null;
+            currentUser = null;
+            document.getElementById('bottom-nav').classList.add('hidden');
+            document.getElementById('role-pill-display').classList.add('hidden');
+            document.getElementById('header-user-status').innerText = "Дистанционное обучение";
+            showScreen('screen-auth');
+        }
+    );
 }
 
 // --- NAVIGATION & TABS ---
@@ -231,14 +295,14 @@ function showScreen(screenId) {
 
 function switchNavTab(tabName) {
     triggerHaptic();
-    document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
-    
-    // Highlight button
-    const navButtons = document.querySelectorAll('.nav-item');
-    if (tabName === 'lessons') navButtons[0].classList.add('active');
-    else if (tabName === 'homeworks') navButtons[1].classList.add('active');
-    else if (tabName === 'reviews' && navButtons[2]) navButtons[2].classList.add('active');
-    else if (tabName === 'students' && navButtons[3]) navButtons[3].classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(btn => {
+        const onclickAttr = btn.getAttribute('onclick') || '';
+        if (onclickAttr.includes(`'${tabName}'`)) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
 
     if (tabName === 'lessons') {
         showScreen('screen-lessons');
@@ -252,7 +316,205 @@ function switchNavTab(tabName) {
     } else if (tabName === 'students') {
         showScreen('screen-students');
         loadStudentsAndInvites();
+    } else if (tabName === 'profile') {
+        showScreen('screen-profile');
+        loadProfile();
     }
+}
+
+function showToast(message) {
+    let toast = document.getElementById('app-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'app-toast';
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 20px;
+            font-size: 0.86rem;
+            font-weight: 600;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            z-index: 10000;
+            pointer-events: none;
+            transition: opacity 0.3s, transform 0.3s;
+            opacity: 0;
+        `;
+        document.body.appendChild(toast);
+    }
+    toast.innerText = message;
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateX(-50%) translateY(10px)';
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(-50%) translateY(0)';
+    }, 2500);
+}
+
+async function refreshAppData() {
+    triggerHaptic();
+    const btn = document.getElementById('btn-refresh');
+    if (btn) btn.classList.add('spin-anim');
+
+    try {
+        if (currentToken) {
+            const meRes = await apiRequest('/api/auth/me');
+            currentUser = meRes.user;
+            setupUserSession(false);
+        }
+
+        const activeScreen = document.querySelector('.screen.active');
+        const screenId = activeScreen ? activeScreen.id : '';
+
+        const promises = [loadLessons(), loadHomeworks()];
+        if (currentUser && currentUser.role === 'teacher') {
+            promises.push(loadSubmissions());
+            promises.push(loadStudentsAndInvites());
+        }
+        if (screenId === 'screen-profile') {
+            promises.push(loadProfile());
+        }
+        await Promise.all(promises);
+        showToast("Данные успешно обновлены! ✨");
+    } catch (e) {
+        console.error("Refresh error:", e);
+    } finally {
+        if (btn) {
+            setTimeout(() => btn.classList.remove('spin-anim'), 400);
+        }
+    }
+}
+
+async function loadProfile() {
+    try {
+        const res = await apiRequest('/api/profile');
+        const user = res.user;
+        const stats = res.stats || {};
+
+        document.getElementById('prof-full-name').innerText = user.full_name || 'Пользователь';
+        document.getElementById('prof-role-badge').innerText = user.role === 'teacher' ? 'Преподаватель' : 'Ученик';
+        document.getElementById('prof-role-badge').className = `role-pill ${user.role}`;
+
+        const letter = (user.full_name && user.full_name.trim().length > 0) 
+            ? user.full_name.trim()[0].toUpperCase() 
+            : '🎓';
+        document.getElementById('prof-avatar-letter').innerText = letter;
+
+        let metaText = user.role === 'teacher' ? 'Преподаватель курса English Hub' : 'Активный ученик курса English Hub';
+        if (user.telegram_id) {
+            metaText += ` • TG ID: ${user.telegram_id}`;
+        }
+        document.getElementById('prof-telegram-meta').innerText = metaText;
+
+        const studentSec = document.getElementById('prof-student-section');
+        const teacherSec = document.getElementById('prof-teacher-section');
+
+        if (user.role === 'student') {
+            if (studentSec) studentSec.classList.remove('hidden');
+            if (teacherSec) teacherSec.classList.add('hidden');
+
+            document.getElementById('prof-stat-lessons').innerText = stats.total_lessons || 0;
+            document.getElementById('prof-stat-submitted').innerText = stats.submitted_count || 0;
+            document.getElementById('prof-stat-reviewed').innerText = stats.reviewed_count || 0;
+            document.getElementById('prof-stat-score').innerText = stats.avg_score ? stats.avg_score : '—';
+
+            const historyContainer = document.getElementById('prof-submissions-history');
+            historyContainer.innerHTML = '';
+
+            const subs = res.submissions || [];
+            if (subs.length === 0) {
+                historyContainer.innerHTML = `
+                    <div class="card" style="text-align: center; color: var(--text-secondary); padding: 24px;">
+                        <div style="font-size: 2rem; margin-bottom: 6px;">✍️</div>
+                        <div>Вы еще не сдали ни одного домашнего задания.</div>
+                        <button class="btn-primary btn-sm" style="margin-top: 12px;" onclick="switchNavTab('homeworks')">
+                            Перейти к заданиям →
+                        </button>
+                    </div>
+                `;
+            } else {
+                subs.forEach(s => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.style.marginBottom = '10px';
+
+                    let badge = s.status === 'reviewed' 
+                        ? `<span class="status-badge reviewed">Оценка: ${escapeHtml(s.score || '5')}</span>` 
+                        : '<span class="status-badge submitted">На проверке</span>';
+
+                    card.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            ${badge}
+                            <span style="font-size: 0.78rem; color: var(--text-muted);">${new Date(s.submitted_at).toLocaleDateString('ru-RU')}</span>
+                        </div>
+                        <div style="font-weight: 700; font-size: 0.98rem; margin-bottom: 4px;">${escapeHtml(s.homework_title || 'Домашнее задание')}</div>
+                        ${s.lesson_title ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">📖 ${escapeHtml(s.lesson_title)}</div>` : ''}
+                        ${s.feedback ? `
+                            <div style="background: var(--bg-main); border-left: 3px solid #16a34a; padding: 10px 12px; border-radius: 6px; font-size: 0.84rem; margin: 8px 0; color: var(--text-primary);">
+                                <strong>👨‍🏫 Отзыв учителя:</strong> ${escapeHtml(s.feedback)}
+                            </div>
+                        ` : ''}
+                        <button class="btn-secondary btn-sm" style="width: 100%; margin-top: 6px;" onclick="openSolveHomeworkModal(${s.homework_id})">
+                            Посмотреть работу и ответы →
+                        </button>
+                    `;
+                    historyContainer.appendChild(card);
+                });
+            }
+        } else {
+            // Teacher
+            if (studentSec) studentSec.classList.add('hidden');
+            if (teacherSec) teacherSec.classList.remove('hidden');
+
+            document.getElementById('prof-teach-students').innerText = stats.total_students || 0;
+            document.getElementById('prof-teach-lessons').innerText = stats.total_lessons || 0;
+            document.getElementById('prof-teach-hw').innerText = stats.total_homeworks || 0;
+            document.getElementById('prof-teach-pending').innerText = stats.pending_reviews || 0;
+        }
+    } catch (e) {
+        console.error("Profile load error:", e);
+    }
+}
+
+async function downloadDatabaseBackup() {
+    triggerHaptic();
+    try {
+        const data = await apiRequest('/api/backup');
+        const jsonStr = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `english_hub_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("Резервная копия скачана на устройство! 💾");
+    } catch (e) {
+        alert("Ошибка скачивания бэкапа: " + e.message);
+    }
+}
+
+async function uploadDatabaseBackup(inputEl) {
+    if (!inputEl.files || !inputEl.files[0]) return;
+    const file = inputEl.files[0];
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            await apiRequest('/api/restore', 'POST', data);
+            showToast("База данных успешно восстановлена! 🎉");
+            refreshAppData();
+        } catch (err) {
+            alert("Ошибка восстановления: " + err.message);
+        }
+    };
+    reader.readAsText(file);
 }
 
 function showLessonsScreen() {
